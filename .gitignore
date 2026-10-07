@@ -2,7 +2,7 @@
 backend/venv/
 __pycache__/
 *.pyc
-
+backend/uploads/
 # Flutter
 mobile/.dart_tool/
 mobile/build/
