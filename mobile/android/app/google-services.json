@@ -1,0 +1,39 @@
+{
+  "project_info": {
+    "project_number": "74952892455",
+    "project_id": "ai-study-assistant-f8589",
+    "storage_bucket": "ai-study-assistant-f8589.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:74952892455:android:69d30eb05cca066078ee02",
+        "android_client_info": {
+          "package_name": "com.example.mobile"
+        }
+      },
+      "oauth_client": [
+        {
+          "client_id": "74952892455-ag968fdlvqbbjr5cdtoerhp2qjau218r.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
+      "api_key": [
+        {
+          "current_key": "AIzaSyBaRZRbk4TLBvJ85IEt2mat_8l0lJAP9SA"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": [
+            {
+              "client_id": "74952892455-ag968fdlvqbbjr5cdtoerhp2qjau218r.apps.googleusercontent.com",
+              "client_type": 3
+            }
+          ]
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

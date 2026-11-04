@@ -6,7 +6,14 @@ from schemas.user import UserCreate,UserResponse,UserUpdate,MessageResponse
 from sqlalchemy.orm import Session
 from schemas.document import DocumentCreate,DocumentResponse
 from services.pdf_service import extract_text_from_pdf
+from services.user_service import get_or_create_user
+from firebase_auth import get_current_user
+import os
+import uuid
+from pathlib import Path
+import logging
 app=FastAPI()
+
 Base.metadata.create_all(bind=engine)
 def get_db():
     db=SessionLocal()
@@ -14,6 +21,18 @@ def get_db():
         yield db
     finally:
         db.close() 
+@app.get("/auth/me")   
+def read_current_user(
+    current_user:dict=Depends(get_current_user),
+    db:Session=Depends(get_db),
+):
+    user=get_or_create_user(db,current_user)     
+    return {
+        "id":user.id,
+        "uid":user.firebase_uid,
+        "name":user.name,
+        "email":user.email,
+    }
 @app.post("/users",response_model=UserResponse)       
 def create_user(
                 user:UserCreate,
@@ -73,9 +92,11 @@ def delete_user(user_id:int,db:Session=Depends(get_db)):
     }
 @app.post("/documents",response_model=DocumentResponse)    
 def create_document(document:DocumentCreate,
-                    user_id:int,db:Session=Depends(get_db)):
+                    current_user:dict=Depends(get_current_user),
+                    db:Session=Depends(get_db)):
+    user=get_or_create_user(db,current_user)
     new_document=Document(
-        user_id=user_id,
+        user_id=user.id,
         file_name=document.file_name,
         file_path=document.file_path
     )
@@ -84,22 +105,53 @@ def create_document(document:DocumentCreate,
     db.refresh(new_document)
     return new_document
 @app.post("/documents/upload",response_model=DocumentResponse)
-def upload_document(user_id:int,
+def upload_document(
                     file:UploadFile=File(...),
+                    current_user:dict=Depends(get_current_user),
                     db:Session=Depends(get_db)
                     ):
-    file_path = f"uploads/{file.filename}"
-    with open(file_path,"wb") as buffer:
-        buffer.write(file.file.read())
-    extracted_text=extract_text_from_pdf(file_path)
-    print(extracted_text[:2000])
-    new_document=Document(
-        user_id=user_id,
-        file_name=file.filename,
-        file_path=file_path,
-        processing_status="processed"
-    )   
-    db.add(new_document) 
-    db.commit()
-    db.refresh(new_document)
-    return new_document
+    #we only accept pdf files for this endpoint
+    if not file.filename or Path(file.filename).suffix.lower()!=".pdf":
+        raise HTTPException(
+            status_code=400,
+            detail="Please upload a file in PDF format"
+        )
+    #get the owner from the verified firebase identity
+    user=get_or_create_user(db,current_user)
+    #Give each upload a unique filename to avoid over writing on other files
+    os.makedirs("uploads",exist_ok=True)
+    safe_filename=Path(file.filename).name
+    stored_filename=f"{uuid.uuid4().hex}_{safe_filename}"
+    file_path=os.path.join("uploads",stored_filename)
+    try:
+        with open(file_path,"wb") as buffer:
+            buffer.write(file.file.read())
+        extracted_text=extract_text_from_pdf(file_path)
+        print(extracted_text[:2000])
+        new_document=Document(
+            user_id=user.id,
+            file_name=file.filename,
+            file_path=file_path,
+            processing_status="processed"
+        )   
+        db.add(new_document) 
+        db.commit()
+        db.refresh(new_document)
+        return new_document
+    except Exception:
+        db.rollback()
+        if(os.path.exists(file_path)):
+            os.remove(file_path)
+        logging.exception("PDF upload failed!")    
+        raise HTTPException(
+            status_code=500,
+            detail="PDF could not be processed"
+        )   
+@app.get("/documents",response_model=list[DocumentResponse])
+def get_documents(current_user:dict=Depends(get_current_user),
+                  db:Session=Depends(get_db)):
+    user=get_or_create_user(db,current_user)
+    documents=db.query(Document).filter(Document.user_id==user.id).order_by(Document.uploaded_at.desc()).all()
+    return documents
+
+    
